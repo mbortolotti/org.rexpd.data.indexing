@@ -1,0 +1,10 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: ReX Powder Data Indexing
+Bundle-SymbolicName: org.rexpd.data.indexing
+Bundle-Version: 0.6.3
+Bundle-RequiredExecutionEnvironment: JavaSE-1.6
+Require-Bundle: org.rexpd.core;bundle-version="0.6.3",
+ rex.structure;bundle-version="0.6.3",
+ org.eclipse.core.runtime;bundle-version="3.8.0"
+Export-Package: org.rexpd.diffraction.indexing
