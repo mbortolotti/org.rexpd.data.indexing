@@ -1,4 +1,4 @@
-package org.rexpd.diffraction.indexing;
+package org.rexpd.data.indexing;
 
 import java.io.File;
 import java.io.IOException;

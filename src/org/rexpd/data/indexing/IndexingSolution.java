@@ -1,4 +1,4 @@
-package org.rexpd.diffraction.indexing;
+package org.rexpd.data.indexing;
 
 
 import org.rexpd.structure.structure.Structure;
