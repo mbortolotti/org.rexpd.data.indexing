@@ -5,15 +5,15 @@ import java.io.IOException;
 import java.util.List;
 
 import org.eclipse.core.runtime.Platform;
+import org.rexpd.core.utils.Config;
 import org.rexpd.structure.structure.Peak;
 import org.rexpd.structure.structure.Radiation;
 
-import org.rexpd.structure.utils.Config;
-
 public abstract class IndexingProgram {
 
+	static final String PLUGIN_ID = "org.rexpd.data.indexing";
 	static final String BIN_PATH = "data/bin/";
-
+	
 	private IndexingOptions indexingOptions = new IndexingOptions();
 
 	public IndexingOptions getIndexingOptions() {
@@ -21,6 +21,7 @@ public abstract class IndexingProgram {
 	}
 
 	public String getCommand() throws IOException, InterruptedException {
+		
 		String OS = Platform.OS_WIN32; /* default */
 		String suffix = "";
 		if (Platform.isRunning())
@@ -31,7 +32,8 @@ public abstract class IndexingProgram {
 			suffix = "osx";
 		else if (OS.equals(Platform.OS_LINUX))
 			suffix = "linux";
-		String command = Config.getFullPath(BIN_PATH + toString().toLowerCase() + "." + suffix);
+		String command = BIN_PATH + toString().toLowerCase() + "." + suffix;
+		command = Config.getURL(PLUGIN_ID, command).getPath();
 		new File(command).setExecutable(true);
 		return command;
 	}
