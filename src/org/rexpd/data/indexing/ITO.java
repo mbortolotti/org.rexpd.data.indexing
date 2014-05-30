@@ -3,23 +3,22 @@ package org.rexpd.data.indexing;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.io.Reader;
+import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.StringTokenizer;
 
+import org.rexpd.crystal.CrystalSystem;
 import org.rexpd.structure.structure.Peak;
 import org.rexpd.structure.structure.Radiation;
 import org.rexpd.structure.structure.SpaceGroup;
-import org.rexpd.structure.structure.SpaceGroup.CRYSTAL_SYSTEM;
 
 
 public class ITO extends IndexingProgram {
@@ -46,7 +45,7 @@ public class ITO extends IndexingProgram {
 		/* write the peak list input */
 
 		if (peaksList != null)
-			savePeakList(peaksList, radiation);
+			writeProgramInput(peaksList, radiation);
 
 		/* Run the command-line indexing program */
 
@@ -77,16 +76,21 @@ public class ITO extends IndexingProgram {
 		
 		process.waitFor();
 
-		/* Parse the output */
+		/** Parse the output **/
 
 		List<IndexingSolution> solutions = new ArrayList<IndexingSolution>();
 		
-		if (!(new File(toString() + ".out").exists()))
+		
+//		if (!(new File(toString() + ".out").exists()))
+//			return solutions;
+//
+//		Reader reader = new FileReader(toString() + ".out");
+//		BufferedReader br = new BufferedReader(reader);
+
+		String output = readProgramOutput();
+		if (output == null)
 			return solutions;
-
-		Reader reader = new FileReader(toString() + ".out");
-		BufferedReader br = new BufferedReader(reader);
-
+		BufferedReader br = new BufferedReader(new StringReader(output));
 		String line = null;
 
 		while ((line = br.readLine()) != null) {
@@ -127,7 +131,7 @@ public class ITO extends IndexingProgram {
 						solutions.get(n_sol - 1).getStructure().getCell().setAlpha(Double.parseDouble(tokenizer.nextToken()));
 						solutions.get(n_sol - 1).getStructure().getCell().setBeta(Double.parseDouble(tokenizer.nextToken()));
 						solutions.get(n_sol - 1).getStructure().getCell().setGamma(Double.parseDouble(tokenizer.nextToken()));
-						CRYSTAL_SYSTEM symmetry = solutions.get(n_sol - 1).getStructure().getCell().guessCrystalSystem();
+						CrystalSystem symmetry = solutions.get(n_sol - 1).getStructure().getCell().guessCrystalSystem();
 						solutions.get(n_sol - 1).getStructure().setHallSymbol(SpaceGroup.fromCrystalSystem(symmetry).hall());
 					}
 					line = br.readLine();
@@ -137,7 +141,7 @@ public class ITO extends IndexingProgram {
 		
 		br.close();
 			
-		/* move generated files in temp dir */	   
+		/** move generated files in temp dir **/	   
 	    
 	    new File(toString() + ".in").renameTo(new File(tempDir, toString() + ".in"));
 	    new File(toString() + ".out").renameTo(new File(tempDir, toString() + ".out"));	
@@ -148,35 +152,40 @@ public class ITO extends IndexingProgram {
 		return solutions;
 	}
 
-	private void savePeakList(List<? extends Peak> peaksList, Radiation radiation) throws IOException {
-		String filename = toString() + ".in";
-		PrintWriter output = new PrintWriter(filename);
+	@Override
+	public String generateInput(List<? extends Peak> peaksList, Radiation radiation) {
 		double lambda = radiation.getDefaultComponent().getWaveLength();
 		Locale locale = Locale.US;
-		output.println("*** ITO peak list ***");
-		output.print("0005");
-		output.print(getIndexingOptions().searchOrthorombic ? " 1" : "-1");
-		output.print(getIndexingOptions().searchMonoclinic ? " 1" : "-1");
-		output.print(getIndexingOptions().searchTriclinic ? " 1" : "-1");
-		output.print(String.format(locale, "%5.2f", getIndexingOptions().SearchTol2D));
-		output.print(String.format(locale, "%5.2f", getIndexingOptions().SearchTol3D));
-		output.print(String.format(locale, "%10.5f", lambda));
+		String inputs = ("*** ITO peak list ***\r\n");
+		inputs += ("0005");
+		inputs += (getIndexingOptions().searchOrthorombic ? " 1" : "-1");
+		inputs += (getIndexingOptions().searchMonoclinic ? " 1" : "-1");
+		inputs += (getIndexingOptions().searchTriclinic ? " 1" : "-1");
+		inputs += (String.format(locale, "%5.2f", getIndexingOptions().SearchTol2D));
+		inputs += (String.format(locale, "%5.2f", getIndexingOptions().SearchTol3D));
+		inputs += (String.format(locale, "%10.5f", lambda));
 		for (int blank = 0; blank < 20; blank++)
-			output.print(" ");
-		output.print(String.format(locale, "%10.5f", getIndexingOptions().MW));
-		output.print(String.format(locale, "%10.5f", getIndexingOptions().density));
-		output.print(String.format(locale, "%8.4f", getIndexingOptions().peakPosError));
-		output.println("  ");
-		output.print(String.format(locale, "%10.4f", getIndexingOptions().zeroError));
-		output.print(String.format(locale, "%10.1f", getIndexingOptions().minFOM));
-		output.println(String.format(locale, "%10.0f", (double) getIndexingOptions().minIndexedLines));
+			inputs += (" ");
+		inputs += (String.format(locale, "%10.5f", getIndexingOptions().MW));
+		inputs += (String.format(locale, "%10.5f", getIndexingOptions().density));
+		inputs += (String.format(locale, "%8.4f", getIndexingOptions().peakPosError));
+		inputs += ("  \r\n");
+		inputs += (String.format(locale, "%10.4f", getIndexingOptions().zeroError));
+		inputs += (String.format(locale, "%10.1f", getIndexingOptions().minFOM));
+		inputs += (String.format(locale, "%10.0f", (double) getIndexingOptions().minIndexedLines));
+		inputs += ("\r\n");
 		for (int np = 0; np < peaksList.size(); np++) {
 			Peak peak = peaksList.get(np);
-			output.println(String.format(locale, "%8.5f", peak.getDSpacing()));
+			inputs += (String.format(locale, "%8.5f\r\n", peak.getDSpacing()));
 		}
-		output.println("0.");
-		output.println("END");
-		output.close();
+		inputs += ("0.\r\n");
+		inputs += ("END\r\n");
+		return inputs;
+	}
+
+	@Override
+	protected String getOutputFileName() {
+		return toString() + ".out";
 	}
 
 }

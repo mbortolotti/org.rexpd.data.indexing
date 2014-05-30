@@ -10,15 +10,15 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.io.Reader;
+import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+import org.rexpd.crystal.CrystalSystem;
 import org.rexpd.structure.structure.Peak;
 import org.rexpd.structure.structure.Radiation;
 import org.rexpd.structure.structure.SpaceGroup;
-import org.rexpd.structure.structure.SpaceGroup.CRYSTAL_SYSTEM;
 
 
 public class NTREOR extends IndexingProgram {
@@ -30,15 +30,15 @@ public class NTREOR extends IndexingProgram {
 
 	@Override
 	public List<IndexingSolution> runIndexing(List<? extends Peak> peaksList, Radiation radiation)
-	throws IOException, InterruptedException {
-			
-	    /* Creates temp dir if it doesn't exist */
-		
-	    File tempDir = new File("temp");
-	    if (!tempDir.exists()) tempDir.mkdir();
-			
+			throws IOException, InterruptedException {
+
+		/* Creates temp dir if it doesn't exist */
+
+		File tempDir = new File("temp");
+		if (!tempDir.exists()) tempDir.mkdir();
+
 		/* delete previous run files */
-		
+
 		new File(tempDir, toString() + ".in").delete();
 		new File(tempDir, toString() + ".out").delete();
 		new File(tempDir, toString() + ".con").delete();
@@ -47,7 +47,7 @@ public class NTREOR extends IndexingProgram {
 		/* write the peak list input */
 
 		if (peaksList != null)
-			savePeakList(peaksList, radiation);
+			writeProgramInput(peaksList, radiation);
 
 		/* Run the command-line indexing program */
 
@@ -92,38 +92,57 @@ public class NTREOR extends IndexingProgram {
 		process.waitFor();
 
 		/* Parse the output */
-		
+
 		List<IndexingSolution> solutions = new ArrayList<IndexingSolution>();
 		IndexingSolution solution = null;
 		
-		if (!(new File(toString() + ".sho").exists()))
-			return solutions;
 
-		Reader reader = new FileReader(toString() + ".sho");
-		BufferedReader br = new BufferedReader(reader);
+//		if (!(new File(toString() + ".sho").exists()))
+//			return solutions;
+//
+//		String outputFileName = toString() + ".sho";
+//		//Reader reader = new FileReader(outputFileName);
+//		BufferedReader br = new BufferedReader(new FileReader(outputFileName));
+		
+		String output = readProgramOutput();
+		if (output == null)
+			return solutions;
+		BufferedReader br = new BufferedReader(new StringReader(output));
+		
 
 		String line = null;
-		int n_sol = 0;
+
+		/** check for the last trial block **/
+		String lastTrialLine = "";
+		while ((line = br.readLine()) != null) {
+			if (line.indexOf("N-TREOR trial #") != -1)
+				lastTrialLine = line;
+		}
+		br.close();
+
+		/** reopen the reader **/
+		br = new BufferedReader(new StringReader(output));
+
 
 		while ((line = br.readLine()) != null) {
-			if (line.indexOf("Number of plausible solutions") != -1) {
-				int blankpos = line.trim().lastIndexOf(" ");
-				if (blankpos != -1)
-					n_sol = Integer.parseInt(line.substring(blankpos + 1, line.length()).trim());
+
+			/** Last trial block contains the final solution **/
+			if (line.indexOf(lastTrialLine) != -1) {
 				while ((line = br.readLine()) != null) {
-					
+
+
 					/** solution entry starts with Crystal system definition **/
-					if (line.indexOf("Crystal system:") != -1) {
+					if (line.indexOf("**** Refined cell parameters ****") != -1) {
 						solution = new IndexingSolution();
-						String csString = line.substring(line.lastIndexOf(":") + 1, line.length()).trim();
-						for (CRYSTAL_SYSTEM crystalSystem : CRYSTAL_SYSTEM.values())
-							if (crystalSystem.toString().equalsIgnoreCase(csString))
-								solution.getStructure().setHallSymbol(SpaceGroup.fromCrystalSystem(crystalSystem).hall());
+						//				String csString = line.substring(line.lastIndexOf(":") + 1, line.length()).trim();
+						//				for (CrystalSystem crystalSystem : CrystalSystem.values())
+						//					if (crystalSystem.toString().equalsIgnoreCase(csString))
+						//						solution.getStructure().setHallSymbol(SpaceGroup.fromCrystalSystem(crystalSystem).hall());
 					}
 					/** still waiting to find a solution **/
 					if (solution == null)
 						continue; 
-					
+
 					String stripped = line.replaceAll(" *\\= *", "\\=").trim();
 					if (stripped.indexOf("A=") != -1) {
 						int pos_a = stripped.indexOf("A=");
@@ -148,44 +167,51 @@ public class NTREOR extends IndexingProgram {
 						int pos_2 = stripped.indexOf("M'(");
 						if (pos_1 != -1 || pos_2 != -1)
 							solution.setFomM(Double.parseDouble(stripped.substring(pos_1 + 2, pos_2)));
-						/** add solution to list, exit loop if no additional solution to parse **/
+
+						/** guess crystal symmetry, add solution to list **/
+						CrystalSystem symmetry = solution.getStructure().getCell().guessCrystalSystem();
+						solution.getStructure().setHallSymbol(SpaceGroup.fromCrystalSystem(symmetry).hall());
+
 						solutions.add(solution); 
 						solution = null;
-						if (--n_sol == 0) break;
+						//if (--n_sol == 0) break;
 					}
 				}
-				break;
 			}
-		}	
-		
+		}
+
 		br.close();
-			
+
 		/** move generated files in temp dir **/
-	    new File(toString() + ".in").renameTo(new File(tempDir, toString() + ".in"));
-	    new File(toString() + ".out").renameTo(new File(tempDir, toString() + ".out"));
-	    new File(toString() + ".con").renameTo(new File(tempDir, toString() + ".con"));
-	    new File(toString() + ".sho").renameTo(new File(tempDir, toString() + ".sho"));
+		new File(toString() + ".in").renameTo(new File(tempDir, toString() + ".in"));
+		new File(toString() + ".out").renameTo(new File(tempDir, toString() + ".out"));
+		new File(toString() + ".con").renameTo(new File(tempDir, toString() + ".con"));
+		new File(toString() + ".sho").renameTo(new File(tempDir, toString() + ".sho"));
 
 		return solutions;
 	}
 
-	private void savePeakList(List<? extends Peak> peaksList, Radiation radiation) throws IOException {
-		String filename = toString() + ".in";
-		PrintWriter output = new PrintWriter(filename);
+	@Override
+	public String generateInput(List<? extends Peak> peaksList, Radiation radiation) {
 		double lambda = radiation.getDefaultComponent().getWaveLength();
 		Locale locale = Locale.US;
-		output.println("*** NTREOR peak list ***");
+		String input = ("*** NTREOR peak list ***");
 		for (int np = 0; np < peaksList.size(); np++) {
 			Peak peak = peaksList.get(np);
-			output.println(String.format(locale, "%8.5f", peak.getDSpacing()));
+			input += (String.format(locale, "%8.5f\r\n", peak.getDSpacing()));
 		}
-		output.println();
-		output.println("CHOICE=4,"); /* d-values */
-		output.println("WAVE=" + String.format(locale, "%8.5f", lambda) + ",");
-		//		output.println("LIMIT=" + getIndexingOptions().maxZeroShifts + ",");
-		output.println("VOL=-" + String.format(locale, "%8.0f", getIndexingOptions().vMax) + ",");
-		output.println("END*");
-		output.close();
+		input += ("\r\n");
+		input += ("CHOICE=4,\r\n"); /* d-values */
+		input += ("WAVE=" + String.format(locale, "%8.5f", lambda) + ",\r\n");
+		input += ("VOL=" + String.format(locale, "%8.0f", getIndexingOptions().vMax) + ",\r\n");
+		input += ("CEM=" +  String.format(locale, "%5.0f", getIndexingOptions().cellEdgeMax) + ",\r\n");
+		input += ("END*\r\n");
+		return input;
+	}
+
+	@Override
+	protected String getOutputFileName() {
+		return toString() + ".sho";
 	}
 
 }
